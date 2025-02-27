@@ -1,7 +1,7 @@
 const express = require('express');
 const {JWT_SERECT} = require('../config');
 const pool= require('../db')
-const {signup,signin, updateBody, bulkUser} = require('../zod')
+const {signup,signin, updateBody} = require('../zod')
 const jwt = require('jsonwebtoken')
 const authMiddleware = require('../middleware');
 const router = express.Router();
@@ -23,8 +23,11 @@ router.post('/signup',async (req, res)=>{
         return
     }
     try{
-        const check=await pool.query(`INSERT INTO Paytm (firstname, lastname, password, username) VALUES (${firstname} ${lastname} ${password} ${username})`)
-        if(check.rowCount){
+        const check=await pool.query(`INSERT INTO Paytm (firstname, lastname, password, username) VALUES (${firstname} ,${lastname} ,${password} ,${username})`)
+        const balance =1+ Math.random()*10000;
+        const addMoney= await pool.query(`INSERT INTO Accoount (username, balance) VALUES (${username}, ${balance})`)
+        const token = jwt.sign({username},JWT_SERECT)
+        if(check.rowCount && addMoney.rowCount){
         return res.status(200).json({
             msg:"user created succesfully",
             token:token
@@ -51,7 +54,7 @@ router.post('/signin',async (req, res)=>{
     
     try{
         const check = await pool.query(`SELECT username from Paytm where username = ${username} and password =${password}`)
-        const token = jwt.sign({username:username},JWT_SERECT)
+        const token = jwt.sign({username},JWT_SERECT)
         if(check.rowCount){
             res.status(200).json({
                 token
@@ -98,43 +101,30 @@ router.put('/update', authMiddleware, async (req,res)=>{
         })
     }
 })
-router.get('/bulk',authMiddleware, async(req, res )=>{
-    const body = req.body;
-    const filteredBody= bulkUser.safeParse(body)
-    if(!filteredBody.success){
-        return res.status(411).json({
-            msg:"wrong body"
-        })
+router.get('/bulk', authMiddleware, async (req, res) => {
+    try {
+        const filter = req.query.filter || "";
+
+        // Use parameterized query to prevent SQL injection
+        const query = `
+            SELECT * FROM Paytm 
+            WHERE firstname ILIKE $1 
+            OR lastname ILIKE $1 
+            OR username ILIKE $1
+        `;
+
+        const response = await pool.query(query, [`%${filter}%`]);  // Using ILIKE for case-insensitive search
+
+        return res.status(200).json({
+            data: response.rows
+        });
+
+    } catch (err) {
+        console.error("Error fetching data:", err);
+        return res.status(500).json({
+            msg: "Internal Server Error"
+        });
     }
-    const{username, firstname, lastname} = filteredBody.data
-    let query=`SELECT username, firstname, lastname, email FROM Paytm WHERE`
-    let values = []
-        if(username){
-            values.push(username)
-            query+=` username LIKE ${username} OR`
-        }
-        if(firstname){
-            values.push(firstname)
-            query+=` firstname LIKE ${firstname} OR`
-        }
-        if(lastname){
-            values.push(lastname)
-            query+=` lastname LIKE${lastname}`
-        }
-    if(values.length===0){
-        query=`SELECT username, firstname, lastname, email FROM Paytm`
-    }
-    try{
-        const finalQuery= await pool.query(query)
-        if(finalQuery.rowCount==1){
-            return res.status(200).json({
-                msg:"these are the results"
-            })
-        }
-    }catch(err){
-        return res.status(411).json({
-            msg:"invalid",
-        })
-    }
-})  
+});
+
 module.exports=router

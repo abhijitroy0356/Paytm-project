@@ -19,14 +19,14 @@ const updateBody = z.object({
     lastname:z.string().optional(),
     username:z.string()
 })
-const bulkUser = z.object({
-    firstname:z.string().optional(),
-    lastname:z.string().optional(),
-    username:z.string().optional()
+const transfer = z.object({
+    sender:z.string(),
+    receiver:z.string(),
+    amount:z.number()
 })
 module.exports={
     signup,
     signin,
     updateBody,
-    bulkUser
+    transfer
 }   
